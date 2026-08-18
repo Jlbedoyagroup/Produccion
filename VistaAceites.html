@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JLB Gestión de Calidad</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ca8a04">
+    <link rel="apple-touch-icon" href="icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .card-oil { background: white; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; transition: all 0.3s; cursor: pointer; position: relative; overflow: hidden; }
+        .card-oil:hover { transform: translateY(-4px); border-color: #ca8a04; box-shadow: 0 10px 20px -3px rgba(202, 138, 4, 0.15); }
+        .badge-step { font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 99px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .tab-btn { padding: 12px 24px; font-weight: 800; color: #94a3b8; border-bottom: 3px solid transparent; transition: all 0.2s; text-transform: uppercase; font-size: 0.8rem; }
+        .tab-btn.active { color: #ca8a04; border-bottom-color: #ca8a04; }
+        
+        .grid-view { display: none !important; }
+        .grid-view.active { display: grid !important; animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+        .input-tech { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; font-size: 0.9rem; font-weight: 600; color: #334155; transition: border 0.2s; }
+        .input-tech:focus { outline: none; border-color: #ca8a04; ring: 2px solid rgba(202,138,4,0.1); }
+        .label-tech { display: block; font-size: 0.7rem; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 4px; }
+        
+        /* Estilos Bloqueados */
+        .input-tech:disabled { background-color: #f1f5f9; color: #334155; border-color: #cbd5e1; cursor: default; font-weight: 700; }
+        .select-disabled { -webkit-appearance: none; pointer-events: none; background-color: #f1f5f9; }
+        
+        .blink { animation: blinker 1.5s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.7; } }
+    </style>
+</head>
+<body class="p-4 md:p-8 text-slate-800 bg-slate-50">
+
+    <script>
+        // API URL - RECUERDA: Si cambiaste el Backend, haz un "New Deployment" y actualiza este link si cambió.
+        const URL_API = "https://script.google.com/macros/s/AKfycbzdW332Skk5Po7SHLzOddgzLe2Am3WyPpQ6B9bYJI08Nz9sk8kAmWAX28HvAv3BFk-15A/exec";
+    </script>
+
+    <header class="max-w-7xl mx-auto bg-slate-900 text-white p-6 rounded-2xl shadow-xl flex flex-col md:flex-row justify-between items-center mb-8 sticky top-4 z-50 border-b-4 border-yellow-500">
+        <div class="flex items-center gap-4">
+            <div class="bg-yellow-500 p-3 rounded-xl text-slate-900 shadow-lg"><i data-lucide="microscope" class="w-8 h-8"></i></div>
+            <div>
+                <h1 class="font-black text-2xl tracking-tight">GESTIÓN DE CALIDAD</h1>
+                <p class="text-xs text-slate-400 font-medium uppercase tracking-widest mt-1">Laboratorio de Aceites & PCB</p>
+            </div>
+        </div>
+        <div class="flex gap-4 mt-4 md:mt-0 items-center">
+            <button id="btn-install" onclick="instalarPWA()" class="hidden bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg font-bold text-xs uppercase shadow-lg blink transition-all active:scale-95 flex items-center gap-2">
+                <i data-lucide="download" class="w-4 h-4"></i> Instalar App
+            </button>
+            <div class="text-right hidden md:block px-4 border-r border-slate-700">
+                <p class="text-xs text-slate-500 uppercase font-bold">Total Pendientes</p>
+                <p class="text-2xl font-black text-yellow-500" id="stat-total">0</p>
+            </div>
+            <button onclick="cargarListaAceites()" class="bg-slate-800 hover:bg-slate-700 p-3 rounded-full transition-all shadow-sm border border-slate-700 active:scale-95">
+                <i data-lucide="refresh-cw" class="w-6 h-6 text-yellow-500"></i>
+            </button>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto">
+        
+        <div class="bg-white rounded-t-xl shadow-sm border-b border-slate-200 mb-6">
+            <div class="p-4 border-b border-slate-100">
+                <div class="relative">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5"></i>
+                    <input type="text" id="buscador" onkeyup="filtrarTarjetas()" placeholder="Buscar por ID de Entrada o Nombre del Cliente..." 
+                        class="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 bg-slate-50 font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all">
+                </div>
+            </div>
+            <div class="flex px-4">
+                <button onclick="switchTab('pendientes')" id="btn-pendientes" class="tab-btn active flex-1 flex items-center justify-center gap-2 py-4"><i data-lucide="list-todo" class="w-4 h-4"></i> PENDIENTES</button>
+                <button onclick="switchTab('analizados')" id="btn-analizados" class="tab-btn flex-1 flex items-center justify-center gap-2 py-4"><i data-lucide="history" class="w-4 h-4"></i> HISTORIAL</button>
+            </div>
+        </div>
+
+        <div id="grid-pendientes" class="grid-view active grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div class="col-span-full py-20 text-center text-slate-400"><i data-lucide="loader-2" class="w-10 h-10 animate-spin mx-auto mb-3 text-yellow-500"></i><p class="font-bold text-sm">Conectando...</p></div>
+        </div>
+        <div id="grid-analizados" class="grid-view grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
+    </main>
+
+    <div id="modal-ficha" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] border border-slate-700">
+            <div class="bg-slate-900 p-6 flex justify-between items-start shrink-0 border-b-4 border-yellow-500">
+                <div>
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="bg-yellow-500 text-slate-900 text-[10px] font-black px-2 py-0.5 rounded uppercase" id="m-tipo">ENSAYO</span>
+                        <span class="text-slate-400 text-xs font-mono" id="m-fecha">--/--/----</span>
+                    </div>
+                    <h3 class="font-black text-3xl text-white tracking-tight" id="m-id">#ID</h3>
+                    <p class="text-sm text-slate-300 font-medium truncate max-w-[300px]" id="m-cliente">Cliente</p>
+                </div>
+                <button onclick="cerrarFicha()" class="text-slate-400 hover:text-white transition-colors bg-slate-800 hover:bg-red-600 p-2 rounded-full"><i data-lucide="x" class="w-6 h-6"></i></button>
+            </div>
+
+            <div class="p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50">
+                <div class="mb-6">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <i data-lucide="database" class="w-4 h-4 text-yellow-600"></i> Especificaciones del Equipo
+                    </h4>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs" id="m-datos-tecnicos"></div>
+                </div>
+
+                <div id="form-registro" class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative">
+                    <div id="badge-readonly" class="hidden absolute top-4 right-4 bg-gray-200 text-gray-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border border-gray-300">
+                        <i data-lucide="lock" class="w-3 h-3 inline mr-1"></i> Solo Lectura
+                    </div>
+                    <h4 class="text-sm font-black text-slate-800 uppercase mb-4 flex items-center gap-2 border-b pb-2">
+                        <i data-lucide="flask-conical" class="w-5 h-5 text-blue-600"></i> Registro de Variables
+                    </h4>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                        <div><label class="label-tech">Temp. Muestra (°C)</label><input type="number" id="inp-temp" class="input-tech" placeholder="24" value="24"></div>
+                        <div><label class="label-tech">Humedad Rel. (%)</label><input type="number" id="inp-hum" class="input-tech" placeholder="50" value="50"></div>
+                        <div><label class="label-tech">Color</label><input type="number" id="inp-color" class="input-tech" step="0.5" placeholder="1.5"></div>
+                        <div><label class="label-tech">Examen Visual</label>
+                            <select id="inp-visual" class="input-tech bg-white">
+                                <option value="CLARO Y BRILLANTE">CLARO Y BRILLANTE</option>
+                                <option value="TURBIO">TURBIO</option>
+                                <option value="LODOS">CON LODOS</option>
+                                <option value="OSCURO">OSCURO</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 bg-slate-50 p-4 rounded-lg border border-slate-100">
+                        <div><label class="label-tech text-blue-700">Rigidez (kV)</label><input type="number" id="inp-rigidez" class="input-tech border-blue-200" placeholder="Min 30"></div>
+                        <div><label class="label-tech text-blue-700">Agua (ppm)</label><input type="number" id="inp-agua" class="input-tech border-blue-200" placeholder="Max 35"></div>
+                        <div><label class="label-tech">Acidez (mgKOH/g)</label><input type="number" id="inp-acidez" class="input-tech" step="0.01" placeholder="0.01"></div>
+                        <div><label class="label-tech">Tensión (dinas)</label><input type="number" id="inp-tension" class="input-tech" placeholder="35"></div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div><label class="label-tech text-red-600">Contenido PCB (ppm)</label><input type="number" id="inp-pcb" class="input-tech border-red-100" placeholder="< 50" value="0"></div>
+                        <div><label class="label-tech">Responsable</label><input type="text" id="inp-responsable" class="input-tech" placeholder="Tu Nombre"></div>
+                    </div>
+
+                    <div class="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
+                        <div class="flex flex-col md:flex-row gap-4 items-end">
+                            <div class="flex-1 w-full">
+                                <label class="label-tech text-yellow-800 text-sm mb-2"><i data-lucide="gavel" class="w-3 h-3 inline"></i> CONCLUSIÓN FINAL</label>
+                                <select id="inp-dictamen" class="w-full p-3 rounded-lg font-bold border-2 border-yellow-400 text-slate-800 bg-white focus:outline-none">
+                                    <option value="APROBADO">✅ APROBADO (LISTO)</option>
+                                    <option value="RECHAZADO">❌ RECHAZADO (NO APTO)</option>
+                                    <option value="OBSERVADO">⚠️ OBSERVADO (CON NOVEDAD)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="info-historial" class="hidden mt-6 bg-green-50 p-6 rounded-xl border border-green-200 text-center">
+                    <div class="flex items-center justify-center gap-2 mb-2">
+                        <i data-lucide="calendar-check" class="w-5 h-5 text-green-700"></i>
+                        <h3 class="text-lg font-black text-green-800 uppercase">FECHA DE REPORTE: <span id="hist-fecha-reporte">--</span></h3>
+                    </div>
+                    <div id="btn-ver-pdf-container" class="hidden mt-4">
+                        <a id="link-pdf" href="#" target="_blank" class="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-all transform hover:scale-105">
+                            <i data-lucide="file-text" class="w-5 h-5"></i> VER CERTIFICADO PDF
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 bg-white border-t border-slate-200 shrink-0 grid grid-cols-1 md:grid-cols-2 gap-3" id="modal-footer">
+                <button onclick="guardarEnsayo(false)" id="btn-save-simple" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-md flex items-center justify-center gap-2 active:scale-95 text-xs md:text-sm tracking-wide">
+                    <i data-lucide="bell-ring" class="w-5 h-5"></i> <div class="text-left"><span class="block leading-none">SOLO NOTIFICAR (LISTO)</span><span class="text-[9px] opacity-80 font-normal">Informa a Producción, sin PDF.</span></div>
+                </button>
+                <button onclick="guardarEnsayo(true)" id="btn-save-full" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-95 text-xs md:text-sm tracking-wide">
+                    <i data-lucide="file-check" class="w-5 h-5"></i> <div class="text-left"><span class="block leading-none">GENERAR CERTIFICADO OFICIAL</span><span class="text-[9px] opacity-80 font-normal">Crea PDF, sube a Drive y notifica.</span></div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let rawData = [];
+        let selItem = null;
+        
+        const CONFIG_CAMPOS = {
+            'PCB': ['inp-temp', 'inp-hum', 'inp-pcb', 'inp-responsable', 'inp-dictamen'],
+            'PARCIAL': ['inp-temp', 'inp-hum', 'inp-color', 'inp-visual', 'inp-rigidez', 'inp-agua', 'inp-acidez', 'inp-tension', 'inp-responsable', 'inp-dictamen'],
+            'GENERAL': 'ALL'
+        };
+
+        async function apiRequest(action, payload = {}) {
+            const body = JSON.stringify({ action, payload });
+            const res = await fetch(URL_API, { method: 'POST', body });
+            return await res.json();
+        }
+
+        async function cargarListaAceites() {
+            document.getElementById('grid-pendientes').innerHTML = '<div class="col-span-full py-20 text-center text-slate-400"><i data-lucide="loader" class="w-10 h-10 animate-spin mx-auto mb-3"></i><p>Sincronizando...</p></div>';
+            lucide.createIcons();
+            try {
+                const res = await apiRequest('Aceites_ObtenerPendientes');
+                rawData = res;
+                procesarListas(res);
+            } catch (e) { alert("Error de conexión: " + e.message); }
+        }
+
+        function procesarListas(data) {
+            // CORRECCIÓN V3.0: YA NO EXCLUIMOS SI EXISTE EN HISTORIAL
+            // Separamos listas sin filtrar ID duplicados entre listas.
+            const realizados = data.filter(i => i.status === 'REALIZADO');
+            const pendientes = data.filter(i => i.status === 'PENDIENTE');
+
+            document.getElementById('stat-total').innerText = pendientes.length;
+            renderGrid(pendientes, 'grid-pendientes', false);
+            renderGrid(realizados, 'grid-analizados', true);
+        }
+
+        // FUNCIÓN DE BÚSQUEDA V3.0
+        function filtrarTarjetas() {
+            const termino = document.getElementById('buscador').value.toUpperCase();
+            const tarjetas = document.querySelectorAll('.card-oil');
+            
+            tarjetas.forEach(card => {
+                const texto = card.innerText.toUpperCase();
+                if (texto.includes(termino)) {
+                    card.parentElement.style.display = ""; // Mostrar (Grid wrapper)
+                } else {
+                    card.parentElement.style.display = "none"; // Ocultar
+                }
+            });
+        }
+
+        function renderGrid(lista, containerId, esHistorial) {
+            const grid = document.getElementById(containerId);
+            grid.innerHTML = '';
+            if (lista.length === 0) {
+                grid.innerHTML = `<div class="col-span-full py-16 text-center opacity-50"><i data-lucide="${esHistorial ? 'history' : 'check-circle'}" class="w-12 h-12 mx-auto mb-2 text-slate-300"></i><p class="text-sm font-bold text-slate-400 italic">No hay registros.</p></div>`;
+                lucide.createIcons();
+                return;
+            }
+            lista.forEach((item) => {
+                let colorBadge = "bg-blue-100 text-blue-800";
+                if (esHistorial) colorBadge = "bg-green-100 text-green-800";
+                else {
+                    const txt = item.textoBoton || "";
+                    if(txt.includes('PCB')) colorBadge = "bg-red-100 text-red-800 border border-red-200";
+                    else if(txt.includes('FQ') || txt.includes('PARCIAL')) colorBadge = "bg-blue-600 text-white shadow-sm";
+                    else colorBadge = "bg-emerald-600 text-white shadow-sm";
+                }
+                const hasPDF = esHistorial && item.pdf && item.pdf.includes('http');
+                
+                // Envolvemos la tarjeta en un div para poder ocultarla con el buscador sin romper el grid
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = `
+                    <div class="card-oil p-5 group flex flex-col h-full" onclick="abrirFicha('${encodeURIComponent(JSON.stringify(item))}')">
+                        <div class="flex justify-between items-start mb-3">
+                            <span class="badge-step ${colorBadge}">${item.textoBoton}</span>
+                            <span class="text-[10px] font-mono font-bold text-slate-400">${item.fechaIngreso}</span>
+                        </div>
+                        <div class="mb-4 flex-1">
+                            <h3 class="font-black text-slate-800 text-2xl tracking-tight mb-1">#${item.id}</h3>
+                            <p class="text-xs font-bold text-slate-500 uppercase truncate leading-tight">${item.cliente}</p>
+                        </div>
+                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-100 text-xs font-semibold text-slate-600 mb-3">
+                            <div class="flex justify-between mb-1"><span>Potencia:</span> <span class="text-slate-900">${item.info.kva || '?'} KVA</span></div>
+                            <div class="flex justify-between"><span>Serie:</span> <span class="text-slate-900 truncate max-w-[100px]">${item.info.serie || '?'}</span></div>
+                        </div>
+                        ${esHistorial ? `
+                            <div class="mt-auto pt-3 border-t border-slate-100 flex items-center justify-between">
+                                <span class="font-black text-sm ${item.resultado==='APROBADO'?'text-green-600':'text-red-600'}">${item.resultado || 'OK'}</span>
+                                ${hasPDF ? '<i data-lucide="file-text" class="w-4 h-4 text-red-500"></i>' : '<i data-lucide="check" class="w-4 h-4 text-green-300"></i>'}
+                            </div>` : `
+                            <div class="mt-auto pt-3 border-t border-slate-100 text-center"><span class="text-xs font-bold text-yellow-600 group-hover:underline">GESTIONAR CALIDAD &rarr;</span></div>`}
+                    </div>`;
+                grid.appendChild(wrapper);
+            });
+            lucide.createIcons();
+        }
+
+        function abrirFicha(jsonItem) {
+            selItem = JSON.parse(decodeURIComponent(jsonItem));
+            const esHistorial = selItem.status === 'REALIZADO';
+            const i = selItem.info || {};
+
+            document.getElementById('m-id').innerText = "#" + selItem.id;
+            document.getElementById('m-cliente').innerText = selItem.cliente;
+            document.getElementById('m-tipo').innerText = selItem.textoBoton;
+            document.getElementById('m-fecha').innerText = selItem.fechaIngreso;
+
+            const fields = [
+                {l:"Marca", v: i.marca}, {l:"Voltajes", v: `${i.vp}/${i.vs}`},
+                {l:"Aceite (L)", v: i.litros}, {l:"Año", v: i.anio}
+            ];
+            document.getElementById('m-datos-tecnicos').innerHTML = fields.map(f=>`
+                <div class="bg-slate-100 p-2 rounded border border-slate-200"><p class="text-[9px] text-slate-500 uppercase font-bold">${f.l}</p><p class="text-xs font-black text-slate-800 truncate" title="${f.v}">${f.v||'-'}</p></div>`).join('');
+            
+            const inputs = document.querySelectorAll('.input-tech, #inp-dictamen');
+            inputs.forEach(inp => { 
+                if(inp.tagName !== 'SELECT') inp.value = ''; 
+                inp.disabled = false; 
+                inp.classList.remove('bg-gray-100', 'opacity-50', 'cursor-not-allowed', 'select-disabled');
+            });
+            document.getElementById('form-registro').classList.remove('hidden');
+            document.getElementById('badge-readonly').classList.add('hidden');
+
+            if (esHistorial) {
+                document.getElementById('modal-footer').classList.add('hidden');
+                document.getElementById('info-historial').classList.remove('hidden');
+                document.getElementById('badge-readonly').classList.remove('hidden');
+
+                const d = selItem.datos || {};
+                document.getElementById('inp-temp').value = d.temp || '';
+                document.getElementById('inp-hum').value = d.hum || '';
+                document.getElementById('inp-color').value = d.color || '';
+                document.getElementById('inp-visual').value = d.visual || 'CLARO Y BRILLANTE';
+                document.getElementById('inp-rigidez').value = d.rigidez || '';
+                document.getElementById('inp-agua').value = d.agua || '';
+                document.getElementById('inp-acidez').value = d.acidez || '';
+                document.getElementById('inp-tension').value = d.tension || '';
+                document.getElementById('inp-pcb').value = d.pcb || '';
+                document.getElementById('inp-dictamen').value = selItem.resultado || 'APROBADO';
+                document.getElementById('inp-responsable').value = selItem.responsable || '';
+                document.getElementById('hist-fecha-reporte').innerText = selItem.fechaReporte || 'N/D';
+
+                inputs.forEach(inp => {
+                    inp.disabled = true;
+                    if(inp.tagName === 'SELECT') inp.classList.add('select-disabled');
+                });
+
+                const divPdf = document.getElementById('btn-ver-pdf-container');
+                const linkPdf = document.getElementById('link-pdf');
+                if (selItem.pdf && selItem.pdf.startsWith('http')) {
+                    divPdf.classList.remove('hidden'); linkPdf.href = selItem.pdf;
+                } else divPdf.classList.add('hidden');
+
+            } else {
+                document.getElementById('modal-footer').classList.remove('hidden');
+                document.getElementById('info-historial').classList.add('hidden');
+                document.getElementById('inp-temp').value = "24";
+                document.getElementById('inp-hum').value = "50";
+                document.getElementById('inp-pcb').value = "0";
+                document.getElementById('inp-dictamen').value = "APROBADO";
+
+                configurarCamposPorTipo(selItem.accion);
+                
+                const btn1 = document.getElementById('btn-save-simple');
+                const btn2 = document.getElementById('btn-save-full');
+                btn1.disabled = false; btn2.disabled = false;
+                btn1.innerHTML = '<i data-lucide="bell-ring" class="w-5 h-5"></i><div class="text-left"><span class="block leading-none">SOLO NOTIFICAR (LISTO)</span><span class="text-[9px] opacity-80 font-normal">Informa a Producción, sin PDF.</span></div>';
+                btn2.innerHTML = '<i data-lucide="file-check" class="w-5 h-5"></i><div class="text-left"><span class="block leading-none">GENERAR CERTIFICADO OFICIAL</span><span class="text-[9px] opacity-80 font-normal">Crea PDF, sube a Drive y notifica.</span></div>';
+                btn1.classList.remove('bg-gray-400'); btn1.classList.add('bg-blue-600');
+                btn2.classList.remove('bg-gray-400'); btn2.classList.add('bg-slate-900');
+            }
+            document.getElementById('modal-ficha').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function configurarCamposPorTipo(tipoAccion) {
+            let camposPermitidos = CONFIG_CAMPOS['GENERAL'];
+            if (tipoAccion.includes('PCB')) camposPermitidos = CONFIG_CAMPOS['PCB'];
+            else if (tipoAccion.includes('PARCIAL')) camposPermitidos = CONFIG_CAMPOS['PARCIAL'];
+            if (camposPermitidos === 'ALL') return; 
+
+            const inputs = document.querySelectorAll('.input-tech, #inp-dictamen');
+            inputs.forEach(inp => {
+                if (!camposPermitidos.includes(inp.id)) {
+                    inp.disabled = true;
+                    inp.value = "N/A"; 
+                    inp.classList.add('bg-gray-100', 'opacity-50', 'cursor-not-allowed');
+                }
+            });
+        }
+
+        async function guardarEnsayo(generarPDF) {
+            const responsable = document.getElementById('inp-responsable').value;
+            const dictamen = document.getElementById('inp-dictamen').value;
+            const esPCB = selItem.accion.includes('PCB'); 
+
+            if (!responsable || !dictamen) { alert("⚠️ Falta RESPONSABLE o DICTAMEN."); return; }
+            if (!esPCB) {
+                const rigidez = document.getElementById('inp-rigidez').value;
+                const agua = document.getElementById('inp-agua').value;
+                if (!rigidez || !agua || rigidez === "N/A") { alert("⚠️ RIGIDEZ y AGUA obligatorios."); return; }
+            } else {
+                const pcb = document.getElementById('inp-pcb').value;
+                if (!pcb) { alert("⚠️ Ingresa el valor de PCB."); return; }
+            }
+
+            const btnUsado = generarPDF ? document.getElementById('btn-save-full') : document.getElementById('btn-save-simple');
+            const btnOtro = generarPDF ? document.getElementById('btn-save-simple') : document.getElementById('btn-save-full');
+            btnUsado.disabled = true; btnOtro.disabled = true;
+            btnUsado.innerHTML = '<i data-lucide="loader-2" class="animate-spin w-5 h-5"></i> <span>PROCESANDO...</span>';
+            btnUsado.classList.add('bg-gray-400');
+
+            const payload = {
+                ID_TRAFO: selItem.id, CLIENTE: selItem.cliente, RESPONSABLE: responsable, TIPO_ENSAYO: selItem.accion,
+                TEMP_MUESTRA: document.getElementById('inp-temp').value,
+                HUMEDAD_REL: document.getElementById('inp-hum').value,
+                COLOR: document.getElementById('inp-color').value,
+                VISUAL: document.getElementById('inp-visual').value,
+                RIGIDEZ_KV: document.getElementById('inp-rigidez').value,
+                AGUA_PPM: document.getElementById('inp-agua').value,
+                ACIDEZ_MGKOH: document.getElementById('inp-acidez').value,
+                TENSION_INTERFACIAL: document.getElementById('inp-tension').value,
+                PCB: document.getElementById('inp-pcb').value,
+                CONCLUSION_MANUAL: dictamen, generarDoc: generarPDF
+            };
+
+            try {
+                const res = await apiRequest('Aceites_GuardarInforme', payload);
+                if (res.exito) {
+                    alert(generarPDF ? "✅ CERTIFICADO GENERADO" : "✅ NOTIFICACIÓN ENVIADA");
+                    cerrarFicha(); cargarListaAceites();
+                } else throw new Error(res.error);
+            } catch(e) {
+                alert("❌ Error: " + e.message);
+                btnUsado.disabled = false; btnOtro.disabled = false;
+                btnUsado.classList.remove('bg-gray-400');
+                btnUsado.innerHTML = '<i data-lucide="refresh-ccw"></i> REINTENTAR';
+            }
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-' + tab).classList.add('active');
+            document.querySelectorAll('.grid-view').forEach(g => g.classList.remove('active'));
+            document.getElementById('grid-' + tab).classList.add('active');
+            // Al cambiar de tab, limpiamos o reaplicamos el filtro si hay texto escrito
+            filtrarTarjetas();
+        }
+        function cerrarFicha() { document.getElementById('modal-ficha').classList.add('hidden'); }
+        
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault(); deferredPrompt = e;
+            document.getElementById('btn-install').classList.remove('hidden');
+        });
+        async function instalarPWA() {
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            deferredPrompt = null;
+            if(outcome === 'accepted') document.getElementById('btn-install').classList.add('hidden');
+        }
+        window.onload = cargarListaAceites;
+    </script>
+</body>
+</html>
