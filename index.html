@@ -79,7 +79,8 @@
                 <section id="programacion" class="view-section active">
                     <div class="flex flex-col md:flex-row justify-between md:items-center mb-4 gap-3">
                           <div class="flex-1 w-full relative">
-                              <input type="text" id="searchProg" onkeyup="filtrarProg()" placeholder="Buscar cliente, ID o estado..." class="w-full px-4 py-3 border border-slate-300 rounded-xl shadow-sm outline-none focus:ring-2 ring-blue-500 text-base pr-24">
+                              <input type="text" id="searchProg" onkeyup="filtrarProg()" placeholder="Buscar cliente, ID o estado..." class="w-full px-4 py-3 border border-slate-300 rounded-xl shadow-sm outline-none focus:ring-2 ring-blue-500 text-base pr-44">
+                              <button id="btn-ver-anulados-prog" onclick="toggleVerAnuladosProg()" class="absolute right-[76px] top-2 px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-colors bg-white text-slate-500 border-slate-200 hover:bg-slate-50">ANULADOS</button>
                               <button id="btn-filtro-ods" onclick="toggleFiltroSinODS()" class="absolute right-2 top-2 px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-colors bg-white text-slate-500 border-slate-200 hover:bg-slate-50">SIN ODS</button>
                           </div>
                           <button onclick="abrirModalHistorico()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow active:scale-95 transition-transform"><i data-lucide="archive"></i> Cargar Histórico</button>
@@ -91,7 +92,13 @@
                 </section>
 
                 <section id="entradas" class="view-section">
-                    <div class="flex justify-between items-center mb-4"><h3 class="font-bold text-slate-700 text-lg">Bitácora</h3><button onclick="abrirModalNuevaEntrada()" class="bg-[#0284c7] text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-sky-700 flex items-center gap-2 transition-transform active:scale-95"><i data-lucide="pen-tool"></i> Registrar</button></div>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-slate-700 text-lg">Bitácora</h3>
+                        <div class="flex items-center gap-2">
+                            <button id="btn-ver-anulados-ent" onclick="toggleVerAnuladosEntradas()" class="px-3 py-2 rounded-lg text-[10px] font-bold border transition-colors bg-white text-slate-500 border-slate-200 hover:bg-slate-50 uppercase">Ver anulados</button>
+                            <button onclick="abrirModalNuevaEntrada()" class="bg-[#0284c7] text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-sky-700 flex items-center gap-2 transition-transform active:scale-95"><i data-lucide="pen-tool"></i> Registrar</button>
+                        </div>
+                    </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="grid-entradas"></div>
                 </section>
 
@@ -217,7 +224,10 @@
                     <span id="m-ids-badge" class="bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded mb-2 inline-block">ID: --</span>
                     <h3 id="m-cliente" class="text-lg font-black text-slate-800 leading-tight">Cliente</h3>
                 </div>
-                <button onclick="cerrarModal()" class="bg-slate-200 hover:bg-slate-300 p-2 rounded-full text-slate-600 transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+                <div class="flex items-center gap-2">
+                    <button onclick="verHistorial('PROGRAMACION', document.getElementById('modal-detalle').dataset.id)" class="bg-slate-200 hover:bg-slate-300 p-2 rounded-full text-slate-600 transition-colors" title="Ver historial de cambios"><i data-lucide="history" class="w-5 h-5"></i></button>
+                    <button onclick="cerrarModal()" class="bg-slate-200 hover:bg-slate-300 p-2 rounded-full text-slate-600 transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
             </div>
             
             <div class="flex border-b border-slate-200 bg-white sticky top-[80px] z-10">
@@ -361,9 +371,83 @@
 
             </div>
 
-            <div class="p-4 border-t border-slate-100 bg-white sticky bottom-0 z-10">
+            <div class="p-4 border-t border-slate-100 bg-white sticky bottom-0 z-10 space-y-2">
+                <input type="text" id="input-motivo-prog" placeholder="Motivo del cambio (opcional, queda en el historial)..." class="w-full border rounded-lg p-2.5 text-xs">
                 <button id="btn-guardar-prog" onclick="guardarCambios()" class="w-full bg-slate-900 hover:bg-slate-800 text-white py-3 rounded-lg text-sm font-bold shadow-lg flex justify-center items-center gap-2 transition-all active:scale-95">
                     <i data-lucide="save" class="w-4 h-4"></i> GUARDAR CAMBIOS
+                </button>
+                <button id="btn-anular-prog" class="w-full bg-red-50 text-red-600 border border-red-200 py-2.5 rounded-lg text-xs font-bold flex justify-center items-center gap-2 uppercase">
+                    <i data-lucide="ban" class="w-4 h-4"></i> ANULAR REGISTRO
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-motivo" class="fixed inset-0 bg-slate-900/90 z-[70] hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl">
+            <div class="p-4 border-b bg-slate-50 rounded-t-xl">
+                <h3 id="motivo-titulo" class="font-black text-slate-800 uppercase text-sm">Motivo</h3>
+            </div>
+            <div class="p-5 space-y-3">
+                <label class="text-[10px] font-bold text-slate-400 uppercase">¿Por qué se hace este cambio? (obligatorio)</label>
+                <textarea id="motivo-input" class="w-full border rounded-lg p-3 text-sm h-24" placeholder="Ej: Se digitó mal el cliente al ingresar el equipo..."></textarea>
+            </div>
+            <div class="p-4 border-t bg-slate-50 rounded-b-xl grid grid-cols-2 gap-2">
+                <button onclick="cerrarModalMotivo()" class="bg-slate-200 text-slate-600 font-bold py-2.5 rounded-lg text-xs uppercase hover:bg-slate-300">Cancelar</button>
+                <button onclick="confirmarMotivo()" class="bg-red-600 text-white font-bold py-2.5 rounded-lg text-xs uppercase hover:bg-red-700">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-historial" class="fixed inset-0 bg-slate-900/90 z-[70] hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-xl shadow-2xl h-full md:h-auto md:max-h-[85vh] flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center bg-slate-50 rounded-t-xl">
+                <h3 id="historial-titulo" class="font-black text-slate-800 uppercase text-sm">Historial</h3>
+                <button onclick="cerrarModalHistorial()" class="p-2 hover:bg-slate-200 rounded-full"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div id="historial-lista" class="p-4 space-y-2 overflow-y-auto flex-1 custom-scrollbar"></div>
+        </div>
+    </div>
+
+    <div id="modal-editar-entrada" class="fixed inset-0 bg-slate-900/90 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-lg rounded-xl shadow-2xl h-full md:h-auto md:max-h-[90vh] flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center bg-slate-50 rounded-t-xl">
+                <div>
+                    <h3 class="font-black text-slate-800 uppercase">Editar Entrada</h3>
+                    <span id="edit-ent-id" class="text-[10px] font-bold text-slate-400 uppercase">ID: --</span>
+                </div>
+                <button onclick="cerrarModalEditarEntrada()" class="p-2 hover:bg-slate-200 rounded-full"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1 space-y-4 custom-scrollbar">
+                <div class="bg-orange-50 border border-orange-200 text-orange-700 text-xs rounded-lg p-3">
+                    El ID / consecutivo no se puede editar (es la llave que enlaza con Programación). Si el consecutivo está mal, anula esta entrada y registra una nueva.
+                </div>
+                <div>
+                    <label class="label-form uppercase">Cliente</label>
+                    <input id="edit-ent-cliente" class="input-form uppercase font-bold">
+                </div>
+                <div>
+                    <label class="label-form uppercase">Descripción Equipo</label>
+                    <input id="edit-ent-descripcion" class="input-form font-bold">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="label-form uppercase">Cantidad</label><input id="edit-ent-cantidad" type="number" class="input-form font-bold"></div>
+                    <div><label class="label-form uppercase">Teléfono</label><input id="edit-ent-telefono" class="input-form"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="label-form uppercase">Contacto</label><input id="edit-ent-contacto" class="input-form"></div>
+                    <div><label class="label-form uppercase">Ciudad</label><input id="edit-ent-ciudad" class="input-form"></div>
+                </div>
+                <div><label class="label-form uppercase">Recibe (JLB)</label><input id="edit-ent-quienRecibe" class="input-form"></div>
+                <div><label class="label-form uppercase">Observaciones</label><textarea id="edit-ent-observaciones" class="input-form h-20"></textarea></div>
+                <div class="pt-2 border-t border-slate-100">
+                    <label class="label-form uppercase text-red-500">Motivo de la edición (obligatorio)</label>
+                    <textarea id="edit-ent-motivo" class="input-form h-16" placeholder="Ej: El nombre del cliente quedó mal digitado..."></textarea>
+                </div>
+            </div>
+            <div class="p-4 border-t bg-slate-50 rounded-b-xl">
+                <button id="btn-guardar-edicion-ent" onclick="guardarEdicionEntrada()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-lg shadow-lg flex justify-center gap-2 transition-all active:scale-95">
+                    <i data-lucide="save" class="w-5 h-5"></i> GUARDAR CAMBIOS
                 </button>
             </div>
         </div>

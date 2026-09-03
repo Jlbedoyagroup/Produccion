@@ -49,6 +49,72 @@ class GasRunner {
 const google = { script: { get run() { return new GasRunner(); } } };
 
 // =============================================================
+// 2.5 AUDITORÍA / TRAZABILIDAD (edición y anulación con rastro)
+// =============================================================
+function getUsuarioAuditoria() {
+    let u = localStorage.getItem('jlb_usuario_auditoria');
+    if (!u || u.trim() === '') {
+        u = prompt('Ingresa tu nombre.\nQuedará registrado en cada edición o anulación que hagas (trazabilidad).');
+        if (!u || u.trim() === '') u = 'Desconocido';
+        localStorage.setItem('jlb_usuario_auditoria', u.trim());
+    }
+    return u;
+}
+
+let motivoCallbackActivo = null;
+function pedirMotivo(titulo, callback) {
+    document.getElementById('motivo-titulo').innerText = titulo;
+    document.getElementById('motivo-input').value = '';
+    motivoCallbackActivo = callback;
+    document.getElementById('modal-motivo').classList.remove('hidden');
+    setTimeout(() => document.getElementById('motivo-input').focus(), 100);
+}
+function cerrarModalMotivo() {
+    document.getElementById('modal-motivo').classList.add('hidden');
+    motivoCallbackActivo = null;
+}
+function confirmarMotivo() {
+    const m = document.getElementById('motivo-input').value.trim();
+    if (!m) { alert('Debes indicar el motivo.'); return; }
+    const cb = motivoCallbackActivo;
+    document.getElementById('modal-motivo').classList.add('hidden');
+    motivoCallbackActivo = null;
+    if (cb) cb(m);
+}
+
+function verHistorial(hoja, id) {
+    document.getElementById('modal-historial').classList.remove('hidden');
+    document.getElementById('historial-titulo').innerText = 'Historial · ' + hoja + ' #' + id;
+    const cont = document.getElementById('historial-lista');
+    cont.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs italic uppercase">Cargando...</div>';
+    google.script.run.withSuccessHandler(rows => {
+        renderHistorial(rows);
+    }).withFailureHandler(e => {
+        cont.innerHTML = '<div class="text-center py-6 text-red-500 text-xs">Error: ' + e + '</div>';
+    }).obtenerAuditoria({ hoja: hoja, id: id });
+}
+function cerrarModalHistorial() { document.getElementById('modal-historial').classList.add('hidden'); }
+function renderHistorial(rows) {
+    const cont = document.getElementById('historial-lista');
+    if (!rows || rows.length === 0) {
+        cont.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs italic uppercase">Sin cambios registrados todavía</div>';
+        return;
+    }
+    cont.innerHTML = rows.map(r => {
+        const accionColor = r.accion === 'ANULACION' ? 'text-red-600 bg-red-50' : (r.accion === 'REACTIVACION' ? 'text-green-600 bg-green-50' : 'text-blue-600 bg-blue-50');
+        return `<div class="border border-slate-200 rounded-lg p-3 text-xs">
+            <div class="flex justify-between items-center mb-1">
+                <span class="font-bold px-2 py-0.5 rounded ${accionColor} uppercase">${r.accion}</span>
+                <span class="text-slate-400 font-mono">${r.fecha}</span>
+            </div>
+            <p class="text-slate-600 mb-1"><b>${r.usuario}</b> · campo <b class="uppercase">${r.campo}</b> ${r.hoja ? '(' + r.hoja + ')' : ''}</p>
+            <p class="text-slate-400"><span class="line-through">${r.anterior || '(vacío)'}</span> → <span class="text-slate-800 font-bold">${r.nuevo}</span></p>
+            ${r.motivo ? `<p class="text-slate-500 italic mt-1 border-t border-slate-100 pt-1">Motivo: ${r.motivo}</p>` : ''}
+        </div>`;
+    }).join('');
+}
+
+// =============================================================
 // 3. LÓGICA DE NEGOCIO & BASE DE DATOS OFFLINE
 // =============================================================
 
@@ -218,16 +284,27 @@ function recargarActual() {
 }
 
 // --- MODULO PROGRAMACION ---
-function cargarProgramacion(){ 
-    const tDesk = document.getElementById('tabla-prog-desktop'); 
+let mostrarAnuladosProg = false;
+function toggleVerAnuladosProg() {
+    mostrarAnuladosProg = !mostrarAnuladosProg;
+    const btn = document.getElementById('btn-ver-anulados-prog');
+    if (btn) {
+        if (mostrarAnuladosProg) { btn.classList.replace('bg-white', 'bg-red-600'); btn.classList.replace('text-slate-500', 'text-white'); }
+        else { btn.classList.replace('bg-red-600', 'bg-white'); btn.classList.replace('text-white', 'text-slate-500'); }
+    }
+    cargarProgramacion();
+}
+
+function cargarProgramacion(){
+    const tDesk = document.getElementById('tabla-prog-desktop');
     const tMob = document.getElementById('lista-prog-mobile');
-    if(tDesk) tDesk.innerHTML='<tr><td colspan="5" class="text-center py-8 text-slate-500 uppercase">Cargando...</td></tr>'; 
+    if(tDesk) tDesk.innerHTML='<tr><td colspan="5" class="text-center py-8 text-slate-500 uppercase">Cargando...</td></tr>';
     if(tMob) tMob.innerHTML='<div class="text-center py-8 text-slate-500 uppercase">Cargando...</div>';
 
-    google.script.run.withSuccessHandler(d => { 
-        datosProg = d; 
+    google.script.run.withSuccessHandler(d => {
+        datosProg = d;
         renderTablaProg();
-    }).obtenerDatosProgramacion(); 
+    }).obtenerDatosProgramacion({ incluirAnulados: mostrarAnuladosProg });
 }
 
 function renderTablaProg() {
@@ -279,13 +356,17 @@ function insertarFilaHTML(r, i, tDesk, tMob) {
     
     if (r.tipo_ejecucion === 'EXTERNA') { badgeColor = "bg-purple-100 text-purple-700 border border-purple-200"; }
 
-    let b = `<span class="font-mono font-bold text-slate-700">${r.idJLB||'--'}</span>`; 
-    if(r.idGroup) b += `<br><span class="bg-orange-100 text-orange-800 px-1 rounded text-[10px] font-bold">G:${r.idGroup}</span>`; 
-    
-    const tr = `<tr id="tr-${i}" class="border-b ${c} hover:bg-slate-50"><td class="px-6 py-4">${b}</td><td class="px-6 py-4 text-xs font-mono text-slate-600">${r.fecha||'S/F'}</td><td class="px-6 py-4 font-medium uppercase">${r.cliente}</td><td class="px-6 py-4"><span class="text-xs font-bold px-2 py-1 rounded ${badgeColor} uppercase">${r.estado}</span></td><td class="px-6 py-4 text-center"><button onclick="abrirModal(${i})" class="text-blue-600 hover:bg-blue-100 p-2 rounded-full transition-colors"><i data-lucide="pencil" class="w-4 h-4"></i></button></td></tr>`;
-    tDesk.insertAdjacentHTML('beforeend', tr); 
+    const esAnulado = r.estadoRegistro === 'ANULADO';
+    const rowOpacity = esAnulado ? 'opacity-50' : '';
 
-    const card = `<div id="mob-${i}" class="mobile-card relative ${c} p-4" onclick="abrirModal(${i})"><div class="flex justify-between items-start mb-2"><div><span class="font-black text-lg text-slate-800 uppercase">#${r.idJLB || r.idGroup}</span><span class="text-xs text-slate-500 block">${r.fecha}</span></div><span class="text-[10px] font-bold px-2 py-1 rounded ${badgeColor} uppercase tracking-wide">${r.estado}</span></div><h4 class="font-bold text-blue-900 text-base mb-1 uppercase">${r.cliente}</h4><p class="text-sm text-slate-600 truncate uppercase">${r.desc}</p><div class="mt-3 pt-2 border-t border-slate-200/50 flex justify-end"><button class="text-blue-600 text-xs font-bold flex items-center gap-1 bg-white px-3 py-1.5 rounded-full border border-blue-100 shadow-sm uppercase"><i data-lucide="pencil" class="w-3 h-3"></i> EDITAR / VER</button></div></div>`;
+    let b = `<span class="font-mono font-bold text-slate-700">${r.idJLB||'--'}</span>`;
+    if(r.idGroup) b += `<br><span class="bg-orange-100 text-orange-800 px-1 rounded text-[10px] font-bold">G:${r.idGroup}</span>`;
+    if(esAnulado) b += `<br><span class="bg-red-600 text-white px-1 rounded text-[10px] font-black">ANULADO</span>`;
+
+    const tr = `<tr id="tr-${i}" class="border-b ${c} ${rowOpacity} hover:bg-slate-50"><td class="px-6 py-4">${b}</td><td class="px-6 py-4 text-xs font-mono text-slate-600">${r.fecha||'S/F'}</td><td class="px-6 py-4 font-medium uppercase">${r.cliente}</td><td class="px-6 py-4"><span class="text-xs font-bold px-2 py-1 rounded ${badgeColor} uppercase">${r.estado}</span></td><td class="px-6 py-4 text-center flex items-center justify-center gap-1"><button onclick="abrirModal(${i})" class="text-blue-600 hover:bg-blue-100 p-2 rounded-full transition-colors"><i data-lucide="pencil" class="w-4 h-4"></i></button><button onclick="verHistorial('PROGRAMACION','${r.idJLB || r.idGroup}')" class="text-slate-400 hover:bg-slate-100 p-2 rounded-full transition-colors"><i data-lucide="history" class="w-4 h-4"></i></button></td></tr>`;
+    tDesk.insertAdjacentHTML('beforeend', tr);
+
+    const card = `<div id="mob-${i}" class="mobile-card relative ${c} ${rowOpacity} p-4"><div onclick="abrirModal(${i})"><div class="flex justify-between items-start mb-2"><div><span class="font-black text-lg text-slate-800 uppercase">#${r.idJLB || r.idGroup}</span>${esAnulado ? ' <span class="bg-red-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded">ANULADO</span>' : ''}<span class="text-xs text-slate-500 block">${r.fecha}</span></div><span class="text-[10px] font-bold px-2 py-1 rounded ${badgeColor} uppercase tracking-wide">${r.estado}</span></div><h4 class="font-bold text-blue-900 text-base mb-1 uppercase">${r.cliente}</h4><p class="text-sm text-slate-600 truncate uppercase">${r.desc}</p></div><div class="mt-3 pt-2 border-t border-slate-200/50 flex justify-end gap-2"><button onclick="verHistorial('PROGRAMACION','${r.idJLB || r.idGroup}')" class="text-slate-500 text-xs font-bold flex items-center gap-1 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-sm uppercase"><i data-lucide="history" class="w-3 h-3"></i> Historial</button><button onclick="abrirModal(${i})" class="text-blue-600 text-xs font-bold flex items-center gap-1 bg-white px-3 py-1.5 rounded-full border border-blue-100 shadow-sm uppercase"><i data-lucide="pencil" class="w-3 h-3"></i> EDITAR / VER</button></div></div>`;
     tMob.insertAdjacentHTML('beforeend', card);
 }
 
@@ -294,11 +375,27 @@ function abrirModal(i){
     const d = datosProg[i]; 
     const modal = document.getElementById('modal-detalle');
     
-    modal.classList.remove('hidden'); 
-    modal.dataset.rowIndex = d.rowIndex; 
-    
-    document.getElementById('m-cliente').innerText = d.cliente; 
-    document.getElementById('m-ids-badge').innerText = `ID: ${d.idJLB} | GRUPO: ${d.idGroup||'N/A'}`; 
+    modal.classList.remove('hidden');
+    modal.dataset.rowIndex = d.rowIndex;
+    modal.dataset.id = d.idJLB || d.idGroup;
+
+    document.getElementById('m-cliente').innerText = d.cliente;
+    document.getElementById('m-ids-badge').innerText = `ID: ${d.idJLB} | GRUPO: ${d.idGroup||'N/A'}`;
+    const motivoProg = document.getElementById('input-motivo-prog');
+    if (motivoProg) motivoProg.value = '';
+    const btnAnularProg = document.getElementById('btn-anular-prog');
+    if (btnAnularProg) {
+        if (d.estadoRegistro === 'ANULADO') {
+            btnAnularProg.innerHTML = '<i data-lucide="rotate-ccw" class="w-4 h-4"></i> REACTIVAR REGISTRO';
+            btnAnularProg.className = 'w-full bg-green-50 text-green-600 border border-green-200 py-2.5 rounded-lg text-xs font-bold flex justify-center items-center gap-2 uppercase';
+            btnAnularProg.onclick = reactivarProgramacionUI;
+        } else {
+            btnAnularProg.innerHTML = '<i data-lucide="ban" class="w-4 h-4"></i> ANULAR REGISTRO';
+            btnAnularProg.className = 'w-full bg-red-50 text-red-600 border border-red-200 py-2.5 rounded-lg text-xs font-bold flex justify-center items-center gap-2 uppercase';
+            btnAnularProg.onclick = anularProgramacionUI;
+        }
+        if(typeof lucide !== 'undefined') lucide.createIcons();
+    }
     document.getElementById('date-f-oferta').value = fechaParaInput(d.f_oferta); 
     document.getElementById('date-f-aut').value = fechaParaInput(d.f_autorizacion); 
     document.getElementById('date-entrega').value = fechaParaInput(d.f_entrega); 
@@ -485,9 +582,34 @@ function guardarCambios(){
         cerrarModal(); 
         indiceActual = -1;
         b.innerHTML = txtOriginal; b.disabled = false; showToast("Cambios guardados"); 
-    }).withFailureHandler(e => { 
-        b.innerHTML = txtOriginal; b.disabled = false; alert("Hubo un error al guardar en la nube: " + e + ". Por favor reintenta."); 
-    }).guardarAvance({rowIndex: item.rowIndex, cambios: c}); 
+    }).withFailureHandler(e => {
+        b.innerHTML = txtOriginal; b.disabled = false; alert("Hubo un error al guardar en la nube: " + e + ". Por favor reintenta.");
+    }).guardarAvance({rowIndex: item.rowIndex, cambios: c, usuario: getUsuarioAuditoria(), motivo: document.getElementById('input-motivo-prog')?.value.trim() || ''});
+}
+
+function anularProgramacionUI() {
+    const modal = document.getElementById('modal-detalle');
+    const rowIndex = modal.dataset.rowIndex;
+    const id = modal.dataset.id;
+    pedirMotivo('Anular Programación #' + id, function(motivo) {
+        google.script.run.withSuccessHandler(r => {
+            if (r.exito) { showToast('Registro anulado'); cerrarModal(); cargarProgramacion(); }
+            else alert('Error: ' + (r.error || ''));
+        }).withFailureHandler(e => alert('Error de red: ' + e))
+        .anularProgramacion({ rowIndex: parseInt(rowIndex), usuario: getUsuarioAuditoria(), motivo: motivo });
+    });
+}
+
+function reactivarProgramacionUI() {
+    const modal = document.getElementById('modal-detalle');
+    const rowIndex = modal.dataset.rowIndex;
+    const id = modal.dataset.id;
+    if (!confirm('¿Reactivar la programación #' + id + '?')) return;
+    google.script.run.withSuccessHandler(r => {
+        if (r.exito) { showToast('Registro reactivado'); cerrarModal(); cargarProgramacion(); }
+        else alert('Error: ' + (r.error || ''));
+    }).withFailureHandler(e => alert('Error de red: ' + e))
+    .reactivarProgramacion({ rowIndex: parseInt(rowIndex), usuario: getUsuarioAuditoria() });
 }
 
 function actualizarFilaDOM(i, r) {
@@ -975,8 +1097,119 @@ function enviarFormulario(){
     }).registrarEntradaRapida(dt); 
 }
 
-function cargarEntradas() { const g = document.getElementById('grid-entradas'); if(!g) return; g.innerHTML='<p class="col-span-full text-center py-4 uppercase">Cargando...</p>'; google.script.run.withSuccessHandler(d => { datosEntradas = d; g.innerHTML = ''; if(d.length === 0) g.innerHTML = '<p class="col-span-full text-center uppercase">Sin registros.</p>'; d.forEach(i => renderCardEntrada(i, g, false)); if(typeof lucide !== 'undefined') lucide.createIcons(); }).obtenerDatosEntradas(); }
-function renderCardEntrada(i, c, p){ const cid = `card-${i.id}`; const pdf = (i.urlPdf && i.urlPdf.length > 5) ? `<a href="${i.urlPdf}" target="_blank" class="w-full bg-red-50 text-red-600 py-2 rounded text-xs font-bold flex justify-center gap-2 uppercase"><i data-lucide="file-text" class="w-4 h-4"></i> VER PDF</a>` : `<button id="btn-gen-${i.id}" onclick="genPDF('${i.id}',${i.rowIndex})" class="w-full bg-slate-800 text-white hover:bg-slate-900 py-2 rounded text-xs font-bold flex justify-center gap-2 uppercase"><i data-lucide="file-plus" class="w-4 h-4"></i> GENERAR</button>`; const ziur = `${i.cantidad||1} / ${i.codigo||'S/C'} / ${i.descripcion}`; const h = `<div id="${cid}" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative"><button onclick="copiarTexto('${ziur}')" class="absolute top-4 right-4 text-slate-400 hover:text-blue-600"><i data-lucide="copy" class="w-5 h-5"></i></button><div><div class="flex justify-between mb-2"><span class="font-bold text-lg uppercase">#${i.id}</span><span class="text-xs bg-slate-100 px-2 py-1 rounded uppercase">${i.fecha}</span></div><div class="bg-blue-50 text-blue-800 text-xs font-mono px-2 py-1 rounded w-fit mb-2 uppercase">🏷️ ${i.codigo||'---'}</div><h4 class="font-bold text-blue-600 mb-1 uppercase">${i.cliente}</h4><p class="text-sm text-slate-500 line-clamp-2 uppercase">${i.descripcion}</p></div><div class="pt-3 border-t mt-4" id="act-${i.id}">${pdf}</div></div>`; if(p) c.insertAdjacentHTML('afterbegin', h); else c.insertAdjacentHTML('beforeend', h); }
+let mostrarAnuladosEntradas = false;
+function toggleVerAnuladosEntradas() {
+    mostrarAnuladosEntradas = !mostrarAnuladosEntradas;
+    const btn = document.getElementById('btn-ver-anulados-ent');
+    if (btn) {
+        if (mostrarAnuladosEntradas) { btn.classList.replace('bg-white', 'bg-red-600'); btn.classList.replace('text-slate-500', 'text-white'); }
+        else { btn.classList.replace('bg-red-600', 'bg-white'); btn.classList.replace('text-white', 'text-slate-500'); }
+    }
+    cargarEntradas();
+}
+
+function cargarEntradas() { const g = document.getElementById('grid-entradas'); if(!g) return; g.innerHTML='<p class="col-span-full text-center py-4 uppercase">Cargando...</p>'; google.script.run.withSuccessHandler(d => { datosEntradas = d; g.innerHTML = ''; if(d.length === 0) g.innerHTML = '<p class="col-span-full text-center uppercase">Sin registros.</p>'; d.forEach(i => renderCardEntrada(i, g, false)); if(typeof lucide !== 'undefined') lucide.createIcons(); }).obtenerDatosEntradas({ incluirAnulados: mostrarAnuladosEntradas }); }
+function renderCardEntrada(i, c, p){
+    const cid = `card-${i.id}`;
+    const pdf = (i.urlPdf && i.urlPdf.length > 5) ? `<a href="${i.urlPdf}" target="_blank" class="w-full bg-red-50 text-red-600 py-2 rounded text-xs font-bold flex justify-center gap-2 uppercase"><i data-lucide="file-text" class="w-4 h-4"></i> VER PDF</a>` : `<button id="btn-gen-${i.id}" onclick="genPDF('${i.id}',${i.rowIndex})" class="w-full bg-slate-800 text-white hover:bg-slate-900 py-2 rounded text-xs font-bold flex justify-center gap-2 uppercase"><i data-lucide="file-plus" class="w-4 h-4"></i> GENERAR</button>`;
+    const ziur = `${i.cantidad||1} / ${i.codigo||'S/C'} / ${i.descripcion}`;
+    const esAnulado = i.estadoRegistro === 'ANULADO';
+    const badgeAnulado = esAnulado ? `<span class="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded uppercase">ANULADO</span>` : '';
+    const btnAnularReactivar = esAnulado
+        ? `<button onclick="reactivarEntradaUI('${i.id}',${i.rowIndex})" class="flex-1 bg-green-50 text-green-600 py-2 rounded text-[10px] font-bold flex justify-center items-center gap-1 uppercase"><i data-lucide="rotate-ccw" class="w-3 h-3"></i> Reactivar</button>`
+        : `<button onclick="anularEntradaUI('${i.id}',${i.rowIndex})" class="flex-1 bg-red-50 text-red-500 py-2 rounded text-[10px] font-bold flex justify-center items-center gap-1 uppercase"><i data-lucide="ban" class="w-3 h-3"></i> Anular</button>`;
+    const h = `<div id="${cid}" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative ${esAnulado ? 'opacity-60' : ''}">
+        ${badgeAnulado}
+        <button onclick="copiarTexto('${ziur}')" class="absolute top-4 right-4 text-slate-400 hover:text-blue-600"><i data-lucide="copy" class="w-5 h-5"></i></button>
+        <div>
+            <div class="flex justify-between mb-2"><span class="font-bold text-lg uppercase">#${i.id}</span><span class="text-xs bg-slate-100 px-2 py-1 rounded uppercase">${i.fecha}</span></div>
+            <div class="bg-blue-50 text-blue-800 text-xs font-mono px-2 py-1 rounded w-fit mb-2 uppercase">🏷️ ${i.codigo||'---'}</div>
+            <h4 class="font-bold text-blue-600 mb-1 uppercase">${i.cliente}</h4>
+            <p class="text-sm text-slate-500 line-clamp-2 uppercase">${i.descripcion}</p>
+        </div>
+        <div class="pt-3 border-t mt-4" id="act-${i.id}">${pdf}</div>
+        <div class="flex gap-2 mt-2">
+            <button onclick="abrirModalEditarEntrada(${i.rowIndex})" class="flex-1 bg-slate-100 text-slate-600 py-2 rounded text-[10px] font-bold flex justify-center items-center gap-1 uppercase"><i data-lucide="pencil" class="w-3 h-3"></i> Editar</button>
+            <button onclick="verHistorial('ENTRADAS','${i.id}')" class="flex-1 bg-slate-100 text-slate-600 py-2 rounded text-[10px] font-bold flex justify-center items-center gap-1 uppercase"><i data-lucide="history" class="w-3 h-3"></i> Historial</button>
+            ${btnAnularReactivar}
+        </div>
+    </div>`;
+    if(p) c.insertAdjacentHTML('afterbegin', h); else c.insertAdjacentHTML('beforeend', h);
+}
+
+function abrirModalEditarEntrada(rowIndex) {
+    const item = datosEntradas.find(x => x.rowIndex === rowIndex);
+    if (!item) { alert('No se encontró el registro. Recarga la página.'); return; }
+    const modal = document.getElementById('modal-editar-entrada');
+    modal.dataset.rowIndex = rowIndex;
+    document.getElementById('edit-ent-id').innerText = 'ID: ' + item.id;
+    document.getElementById('edit-ent-cliente').value = item.cliente || '';
+    document.getElementById('edit-ent-descripcion').value = item.descripcion || '';
+    document.getElementById('edit-ent-cantidad').value = item.cantidad || '';
+    document.getElementById('edit-ent-telefono').value = item.telefono || '';
+    document.getElementById('edit-ent-quienRecibe').value = item.quienRecibe || '';
+    document.getElementById('edit-ent-ciudad').value = item.ciudad || '';
+    document.getElementById('edit-ent-contacto').value = item.contacto || '';
+    document.getElementById('edit-ent-observaciones').value = item.observaciones || '';
+    document.getElementById('edit-ent-motivo').value = '';
+    modal.classList.remove('hidden');
+}
+function cerrarModalEditarEntrada() { document.getElementById('modal-editar-entrada').classList.add('hidden'); }
+
+function guardarEdicionEntrada() {
+    const modal = document.getElementById('modal-editar-entrada');
+    const rowIndex = parseInt(modal.dataset.rowIndex);
+    const motivo = document.getElementById('edit-ent-motivo').value.trim();
+    if (!motivo) { alert('Debes indicar el motivo de la edición.'); return; }
+
+    const cambios = {
+        cliente: document.getElementById('edit-ent-cliente').value.trim().toUpperCase(),
+        descripcion: document.getElementById('edit-ent-descripcion').value.trim().toUpperCase(),
+        cantidad: document.getElementById('edit-ent-cantidad').value,
+        telefono: document.getElementById('edit-ent-telefono').value.trim(),
+        quienRecibe: document.getElementById('edit-ent-quienRecibe').value.trim(),
+        ciudad: document.getElementById('edit-ent-ciudad').value.trim(),
+        contacto: document.getElementById('edit-ent-contacto').value.trim(),
+        observaciones: document.getElementById('edit-ent-observaciones').value.trim()
+    };
+
+    const btn = document.getElementById('btn-guardar-edicion-ent');
+    const txtOriginal = btn.innerHTML; btn.innerHTML = 'GUARDANDO...'; btn.disabled = true;
+
+    google.script.run.withSuccessHandler(r => {
+        btn.innerHTML = txtOriginal; btn.disabled = false;
+        if (r.exito) {
+            cerrarModalEditarEntrada();
+            showToast('Entrada actualizada');
+            cargarEntradas();
+            cargarProgramacion();
+        } else {
+            alert('Error: ' + (r.error || r.mensaje));
+        }
+    }).withFailureHandler(e => {
+        btn.innerHTML = txtOriginal; btn.disabled = false;
+        alert('Error de red: ' + e);
+    }).editarEntrada({ rowIndex: rowIndex, usuario: getUsuarioAuditoria(), motivo: motivo, cambios: cambios });
+}
+
+function anularEntradaUI(id, rowIndex) {
+    pedirMotivo('Anular Entrada #' + id, function(motivo) {
+        google.script.run.withSuccessHandler(r => {
+            if (r.exito) { showToast('Registro anulado'); cargarEntradas(); cargarProgramacion(); }
+            else alert('Error: ' + (r.error || ''));
+        }).withFailureHandler(e => alert('Error de red: ' + e))
+        .anularEntrada({ rowIndex: rowIndex, usuario: getUsuarioAuditoria(), motivo: motivo });
+    });
+}
+
+function reactivarEntradaUI(id, rowIndex) {
+    if (!confirm('¿Reactivar la entrada #' + id + '?')) return;
+    google.script.run.withSuccessHandler(r => {
+        if (r.exito) { showToast('Registro reactivado'); cargarEntradas(); cargarProgramacion(); }
+        else alert('Error: ' + (r.error || ''));
+    }).withFailureHandler(e => alert('Error de red: ' + e))
+    .reactivarEntrada({ rowIndex: rowIndex, usuario: getUsuarioAuditoria() });
+}
 
 function genPDF(id, rix){ 
     if (!id || id === 'undefined') {
