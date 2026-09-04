@@ -960,8 +960,30 @@ function cargarGaleriaFotos() { const grid = document.getElementById('galeria-fo
 function filtrarFotos() { const idQuery = document.getElementById('filtro-foto-id').value.toUpperCase(); const etapaQuery = document.getElementById('filtro-foto-etapa').value.toUpperCase(); const cards = document.querySelectorAll('.gallery-card'); cards.forEach(card => { const idText = card.querySelector('.trafo-id').innerText.toUpperCase(); const etapaText = card.querySelector('.etapa-tag').innerText.toUpperCase(); const matchId = idText.includes(idQuery); const matchEtapa = etapaQuery === "TODAS" || etapaText.includes(etapaQuery); if(matchId && matchEtapa) { card.classList.remove('hidden'); } else { card.classList.add('hidden'); } }); }
 function actualizarDatalistClientes(){ const dl = document.getElementById('lista-clientes'); if(!dl) return; dl.innerHTML = ''; dbClientes.forEach(c => { const opt = document.createElement('option'); opt.value = c.nombre; dl.appendChild(opt); }); }
 function autocompletarCliente(input){ const val = input.value.toUpperCase(); const found = dbClientes.find(c => c.nombre === val); if(found){ document.getElementById('in-cedula-ent').value = found.nit; document.getElementById('in-telefono-ent').value = found.telefono; document.getElementById('in-contacto-ent').value = found.contacto; document.getElementById('in-ciudad-ent').value = found.ciudad; showToast("Cliente cargado"); } }
-function abrirModalNuevaEntrada() { document.getElementById('modal-nueva-entrada').classList.remove('hidden'); setTimeout(initCanvas, 100); }
-function cerrarModalNueva() { document.getElementById('modal-nueva-entrada').classList.add('hidden'); document.getElementById('form-entrada').reset(); limpiarFirma(); }
+function abrirModalNuevaEntrada() { document.getElementById('modal-nueva-entrada').classList.remove('hidden'); setTimeout(initCanvas, 100); cargarConsecutivosAnulados(); }
+function cerrarModalNueva() { document.getElementById('modal-nueva-entrada').classList.add('hidden'); document.getElementById('form-entrada').reset(); limpiarFirma(); toggleReutilizarConsecutivo(); }
+
+function cargarConsecutivosAnulados() {
+    const sel = document.getElementById('sel-reutilizar-consecutivo');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">-- Generar consecutivo nuevo --</option>';
+    google.script.run.withSuccessHandler(rows => {
+        (rows || []).forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r.id;
+            opt.textContent = `#${r.id} — ${r.cliente || 'Sin cliente'} (anulado, ${r.fecha || ''})`;
+            sel.appendChild(opt);
+        });
+    }).obtenerConsecutivosAnulados();
+}
+
+function toggleReutilizarConsecutivo() {
+    const sel = document.getElementById('sel-reutilizar-consecutivo');
+    const wrap = document.getElementById('wrap-motivo-reutilizar');
+    if (!sel || !wrap) return;
+    if (sel.value) wrap.classList.remove('hidden');
+    else wrap.classList.add('hidden');
+}
 function filtrarProg() { renderTablaProg(); } 
 
 function initCanvas() { 
@@ -1059,23 +1081,29 @@ function enviarFormulario(){
     const txtOriginal = b.innerHTML; 
     b.innerHTML = 'PROCESANDO...'; 
     b.disabled = true; 
-    const f = document.getElementById('form-entrada'); 
-    const d = new FormData(f); 
-    const dt = { 
-        empresa: d.get('empresa'), 
-        cliente: d.get('cliente'), 
-        cedula: d.get('cedula'), 
-        contacto: d.get('contacto'), 
-        telefono: d.get('telefono'), 
-        ciudad: d.get('ciudad'), 
-        descripcion: d.get('descripcion'), 
-        cantidad: d.get('cantidad'), 
-        observaciones: d.get('observaciones'), 
-        quienEntrega: d.get('quienEntrega'), 
-        quienRecibe: d.get('quienRecibe'), 
-        codigo: d.get('codigo'), 
-        firmaBase64: getFirmaBase64() 
-    }; 
+    const f = document.getElementById('form-entrada');
+    const d = new FormData(f);
+    const idAReutilizar = document.getElementById('sel-reutilizar-consecutivo')?.value || '';
+    const dt = {
+        empresa: d.get('empresa'),
+        cliente: d.get('cliente'),
+        cedula: d.get('cedula'),
+        contacto: d.get('contacto'),
+        telefono: d.get('telefono'),
+        ciudad: d.get('ciudad'),
+        descripcion: d.get('descripcion'),
+        cantidad: d.get('cantidad'),
+        observaciones: d.get('observaciones'),
+        quienEntrega: d.get('quienEntrega'),
+        quienRecibe: d.get('quienRecibe'),
+        codigo: d.get('codigo'),
+        firmaBase64: getFirmaBase64(),
+        usuario: getUsuarioAuditoria()
+    };
+    if (idAReutilizar) {
+        dt.reutilizarId = idAReutilizar;
+        dt.motivoReutilizacion = document.getElementById('in-motivo-reutilizar')?.value.trim() || '';
+    }
     
     google.script.run.withSuccessHandler(r => { 
         if(r.exito || r.success) { 

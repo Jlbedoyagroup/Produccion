@@ -420,7 +420,7 @@
             </div>
             <div class="p-6 overflow-y-auto flex-1 space-y-4 custom-scrollbar">
                 <div class="bg-orange-50 border border-orange-200 text-orange-700 text-xs rounded-lg p-3">
-                    El ID / consecutivo no se puede editar (es la llave que enlaza con Programación). Si el consecutivo está mal, anula esta entrada y registra una nueva.
+                    El ID / consecutivo no se puede editar aquí (es la llave que enlaza con Programación). Si está mal, anula esta entrada — luego, al registrar la entrada correcta, puedes elegir "Reutilizar consecutivo anulado" para no perderlo.
                 </div>
                 <div>
                     <label class="label-form uppercase">Cliente</label>
@@ -460,6 +460,17 @@
                 <button onclick="cerrarModalNueva()" class="p-2 hover:bg-slate-200 rounded-full"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
             <form id="form-entrada" class="p-6 overflow-y-auto flex-1 space-y-4 custom-scrollbar">
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    <label class="label-form uppercase text-amber-700">Reutilizar consecutivo anulado (opcional)</label>
+                    <select id="sel-reutilizar-consecutivo" onchange="toggleReutilizarConsecutivo()" class="input-form font-bold bg-white">
+                        <option value="">-- Generar consecutivo nuevo --</option>
+                    </select>
+                    <p class="text-[10px] text-amber-600 mt-1">El consecutivo se digita en ZIUR y no se debe perder: si eliges uno anulado, esta entrada lo reutiliza en vez de generar uno nuevo.</p>
+                    <div id="wrap-motivo-reutilizar" class="hidden mt-2">
+                        <label class="label-form uppercase">Motivo de reutilización</label>
+                        <input id="in-motivo-reutilizar" class="input-form" placeholder="Ej: Se anuló por error de digitación, es el mismo trafo...">
+                    </div>
+                </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="label-form uppercase">Empresa</label>
