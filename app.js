@@ -502,20 +502,25 @@ function toggleProveedor(val) {
     if(val === 'EXTERNA') { inp.disabled = false; inp.focus(); } else { inp.disabled = true; inp.value = ''; }
 }
 
-function guardarCambios(){ 
-    const b = document.getElementById('btn-guardar-prog'); 
-    const txtOriginal = b.innerHTML; b.innerHTML = 'GUARDANDO...'; b.disabled = true; 
-    
+let progGuardando = false;
+function guardarCambios(){
+    if (progGuardando) return;
+
+    const b = document.getElementById('btn-guardar-prog');
+    const txtOriginal = b.innerHTML; b.innerHTML = 'GUARDANDO...'; b.disabled = true;
+
     const modal = document.getElementById('modal-detalle');
     const safeRowIndex = modal.dataset.rowIndex;
-    
+
     const item = datosProg.find(r => String(r.rowIndex) === String(safeRowIndex));
     if (!item) {
         alert("Error de sincronización local. Recargue la página.");
         b.innerHTML = txtOriginal; b.disabled = false;
         return;
     }
-    
+
+    progGuardando = true;
+
     const c = { 
         f_oferta: document.getElementById('date-f-oferta').value, 
         oferta_check: document.getElementById('check-oferta').checked,
@@ -578,11 +583,13 @@ function guardarCambios(){
     const iReal = datosProg.indexOf(item);
     actualizarFilaDOM(iReal, item);
 
-    google.script.run.withSuccessHandler(() => { 
-        cerrarModal(); 
+    google.script.run.withSuccessHandler(() => {
+        progGuardando = false;
+        cerrarModal();
         indiceActual = -1;
-        b.innerHTML = txtOriginal; b.disabled = false; showToast("Cambios guardados"); 
+        b.innerHTML = txtOriginal; b.disabled = false; showToast("Cambios guardados");
     }).withFailureHandler(e => {
+        progGuardando = false;
         b.innerHTML = txtOriginal; b.disabled = false; alert("Hubo un error al guardar en la nube: " + e + ". Por favor reintenta.");
     }).guardarAvance({rowIndex: item.rowIndex, cambios: c, usuario: getUsuarioAuditoria(), motivo: document.getElementById('input-motivo-prog')?.value.trim() || ''});
 }
@@ -960,7 +967,7 @@ function cargarGaleriaFotos() { const grid = document.getElementById('galeria-fo
 function filtrarFotos() { const idQuery = document.getElementById('filtro-foto-id').value.toUpperCase(); const etapaQuery = document.getElementById('filtro-foto-etapa').value.toUpperCase(); const cards = document.querySelectorAll('.gallery-card'); cards.forEach(card => { const idText = card.querySelector('.trafo-id').innerText.toUpperCase(); const etapaText = card.querySelector('.etapa-tag').innerText.toUpperCase(); const matchId = idText.includes(idQuery); const matchEtapa = etapaQuery === "TODAS" || etapaText.includes(etapaQuery); if(matchId && matchEtapa) { card.classList.remove('hidden'); } else { card.classList.add('hidden'); } }); }
 function actualizarDatalistClientes(){ const dl = document.getElementById('lista-clientes'); if(!dl) return; dl.innerHTML = ''; dbClientes.forEach(c => { const opt = document.createElement('option'); opt.value = c.nombre; dl.appendChild(opt); }); }
 function autocompletarCliente(input){ const val = input.value.toUpperCase(); const found = dbClientes.find(c => c.nombre === val); if(found){ document.getElementById('in-cedula-ent').value = found.nit; document.getElementById('in-telefono-ent').value = found.telefono; document.getElementById('in-contacto-ent').value = found.contacto; document.getElementById('in-ciudad-ent').value = found.ciudad; showToast("Cliente cargado"); } }
-function abrirModalNuevaEntrada() { document.getElementById('modal-nueva-entrada').classList.remove('hidden'); setTimeout(initCanvas, 100); cargarConsecutivosAnulados(); }
+function abrirModalNuevaEntrada() { entradaEnviando = false; document.getElementById('modal-nueva-entrada').classList.remove('hidden'); setTimeout(initCanvas, 100); cargarConsecutivosAnulados(); }
 function cerrarModalNueva() { document.getElementById('modal-nueva-entrada').classList.add('hidden'); document.getElementById('form-entrada').reset(); limpiarFirma(); toggleReutilizarConsecutivo(); }
 
 function cargarConsecutivosAnulados() {
@@ -1076,11 +1083,15 @@ function getFirmaBase64() {
     return tempCanvas.toDataURL('image/jpeg', 0.6); 
 }
 
-function enviarFormulario(){ 
-    const b = document.getElementById('btn-crear'); 
-    const txtOriginal = b.innerHTML; 
-    b.innerHTML = 'PROCESANDO...'; 
-    b.disabled = true; 
+let entradaEnviando = false;
+function enviarFormulario(){
+    if (entradaEnviando) return;
+    entradaEnviando = true;
+
+    const b = document.getElementById('btn-crear');
+    const txtOriginal = b.innerHTML;
+    b.innerHTML = 'PROCESANDO...';
+    b.disabled = true;
     const f = document.getElementById('form-entrada');
     const d = new FormData(f);
     const idAReutilizar = document.getElementById('sel-reutilizar-consecutivo')?.value || '';
@@ -1105,24 +1116,26 @@ function enviarFormulario(){
         dt.motivoReutilizacion = document.getElementById('in-motivo-reutilizar')?.value.trim() || '';
     }
     
-    google.script.run.withSuccessHandler(r => { 
-        if(r.exito || r.success) { 
-            cerrarModalNueva(); 
-            b.innerHTML = txtOriginal; 
-            b.disabled = false; 
-            cargarEntradas(); 
-            cargarProgramacion(); 
-            showToast("Entrada guardada"); 
-        } else { 
-            alert("Error: " + (r.error || r.message)); 
-            b.innerHTML = txtOriginal; 
-            b.disabled = false; 
-        } 
-    }).withFailureHandler(e => { 
-        b.innerHTML = txtOriginal; 
-        b.disabled = false; 
-        showToast("Error de red: " + e, 'error'); 
-    }).registrarEntradaRapida(dt); 
+    google.script.run.withSuccessHandler(r => {
+        entradaEnviando = false;
+        if(r.exito || r.success) {
+            cerrarModalNueva();
+            b.innerHTML = txtOriginal;
+            b.disabled = false;
+            cargarEntradas();
+            cargarProgramacion();
+            showToast("Entrada guardada");
+        } else {
+            alert("Error: " + (r.error || r.message));
+            b.innerHTML = txtOriginal;
+            b.disabled = false;
+        }
+    }).withFailureHandler(e => {
+        entradaEnviando = false;
+        b.innerHTML = txtOriginal;
+        b.disabled = false;
+        showToast("Error de red: " + e, 'error');
+    }).registrarEntradaRapida(dt);
 }
 
 let mostrarAnuladosEntradas = false;
@@ -1184,12 +1197,16 @@ function abrirModalEditarEntrada(rowIndex) {
 }
 function cerrarModalEditarEntrada() { document.getElementById('modal-editar-entrada').classList.add('hidden'); }
 
+let entradaEditando = false;
 function guardarEdicionEntrada() {
+    if (entradaEditando) return;
+
     const modal = document.getElementById('modal-editar-entrada');
     const rowIndex = parseInt(modal.dataset.rowIndex);
     const motivo = document.getElementById('edit-ent-motivo').value.trim();
     if (!motivo) { alert('Debes indicar el motivo de la edición.'); return; }
 
+    entradaEditando = true;
     const cambios = {
         cliente: document.getElementById('edit-ent-cliente').value.trim().toUpperCase(),
         descripcion: document.getElementById('edit-ent-descripcion').value.trim().toUpperCase(),
@@ -1205,6 +1222,7 @@ function guardarEdicionEntrada() {
     const txtOriginal = btn.innerHTML; btn.innerHTML = 'GUARDANDO...'; btn.disabled = true;
 
     google.script.run.withSuccessHandler(r => {
+        entradaEditando = false;
         btn.innerHTML = txtOriginal; btn.disabled = false;
         if (r.exito) {
             cerrarModalEditarEntrada();
@@ -1215,6 +1233,7 @@ function guardarEdicionEntrada() {
             alert('Error: ' + (r.error || r.mensaje));
         }
     }).withFailureHandler(e => {
+        entradaEditando = false;
         btn.innerHTML = txtOriginal; btn.disabled = false;
         alert('Error de red: ' + e);
     }).editarEntrada({ rowIndex: rowIndex, usuario: getUsuarioAuditoria(), motivo: motivo, cambios: cambios });
